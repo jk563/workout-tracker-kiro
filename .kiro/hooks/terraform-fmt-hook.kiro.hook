@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "name": "Terraform Format",
+  "description": "Automatically runs terraform fmt on Terraform files when they are created or edited to ensure consistent formatting",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.tf",
+      "**/*.tfvars"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A Terraform file has been created or modified. Please run `terraform fmt` on the changed file to ensure proper formatting. The file that changed is: {filePath}. Do not do anything else."
+  }
+}

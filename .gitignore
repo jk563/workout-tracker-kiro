@@ -1,0 +1,50 @@
+# Node.js Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# SvelteKit Build Outputs
+.svelte-kit/
+build/
+dist/
+
+# Vite Build Cache
+.vite/
+.vite-temp/
+
+# Testing Coverage and Reports
+coverage/
+test-results/
+playwright-report/
+.nyc_output/
+
+# Terraform Infrastructure
+infrastructure/.terraform/
+infrastructure/.terraform.lock.hcl
+infrastructure/terraform.tfstate*
+infrastructure/tfplan
+infrastructure/tfplan.json
+
+# Environment Variables
+.env
+.env.local
+.env.production
+.env.development
+
+# Log Files
+*.log
+logs/
+
+# Cache Directories
+.cache/
+.temp/
+.tmp/
+
+# Build Artifacts
+*.tgz
+*.tar.gz
+
+# Husky Git Hooks (generated)
+.husky/_/

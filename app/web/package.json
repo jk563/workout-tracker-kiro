@@ -1,0 +1,72 @@
+{
+  "name": "workout-tracker-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Frontend web application for Workout Tracker",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build && npm run build:clean",
+    "build:static": "vite build",
+    "build:clean": "rm -rf .svelte-kit/output/server .svelte-kit/output/generated/server && echo 'Cleaned server-side build artifacts'",
+    "build:analyze": "vite build --mode production && echo 'Bundle analysis available at .svelte-kit/output/output/client/stats.html'",
+    "build:optimized": "NODE_ENV=production vite build --mode production && npm run perf:check",
+    "build:size": "npm run build && npm run perf:check",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "perf:check": "node scripts/performance-check.js",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "svelte": "^5.36.13"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.54.1",
+    "@sveltejs/adapter-auto": "^6.0.1",
+    "@sveltejs/adapter-static": "^3.0.8",
+    "@sveltejs/kit": "^2.25.1",
+    "@tailwindcss/postcss": "^4.1.11",
+    "@tailwindcss/typography": "^0.5.16",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/svelte": "^5.2.8",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "autoprefixer": "^10.4.21",
+    "cssnano": "^7.1.0",
+    "eslint": "^9.31.0",
+    "eslint-plugin-svelte": "^3.11.0",
+    "husky": "^9.1.7",
+    "jsdom": "^26.1.0",
+    "lint-staged": "^16.1.2",
+    "postcss": "^8.5.6",
+    "prettier": "^3.6.2",
+    "prettier-plugin-svelte": "^3.4.0",
+    "rollup-plugin-visualizer": "^6.0.3",
+    "tailwindcss": "^4.1.11",
+    "vite": "^7.0.5",
+    "vite-plugin-compression": "^0.5.1",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "lint-staged": {
+    "*.{js,svelte}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,md,json}": [
+      "prettier --write"
+    ]
+  }
+}
