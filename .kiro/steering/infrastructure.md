@@ -111,3 +111,53 @@
 - Default TTL: 3600 seconds (1 hour)
 - Compression enabled for bandwidth savings
 - ACM certificates are free for AWS services
+
+## Lambda Function Deployment Pattern
+
+### Core Components
+- **Lambda Function**: Serverless compute with ARM64 architecture
+- **IAM Execution Role**: Basic execution permissions with CloudWatch logging
+- **Environment Variables**: Environment-specific configuration
+- **CloudWatch Logs**: Structured JSON logging with zerolog
+
+### Lambda Configuration
+- **Runtime**: `provided.al2` (custom runtime for Go)
+- **Architecture**: `arm64` (cost-effective and performant)
+- **Memory**: 128 MB (minimum for cost optimization)
+- **Timeout**: 30 seconds (reasonable default)
+- **Handler**: Binary name matching the executable
+
+### IAM Role Configuration
+- **Role Name**: `workout-tracker-lambda-execution-role-{environment}`
+- **Trust Policy**: Lambda service principal
+- **Managed Policy**: `AWSLambdaBasicExecutionRole` for CloudWatch logging
+- **Environment Tags**: Consistent tagging with environment and project
+
+### Deployment Package
+- **Format**: ZIP file containing Go binary
+- **Binary Name**: Must match handler configuration
+- **Source Code Hash**: Terraform tracks changes via `filebase64sha256()`
+- **Location**: `../backend/core/lambda-hello-world.zip`
+
+### Environment-Specific Naming
+- **Function Name**: `workout-tracker-hello-world-{environment}`
+- **Log Group**: `/aws/lambda/workout-tracker-hello-world-{environment}`
+- **IAM Role**: `workout-tracker-lambda-execution-role-{environment}`
+
+### Required Outputs
+- `lambda_function_name`: Function name for invocation
+- `lambda_function_arn`: Full ARN for resource references
+- `lambda_invoke_arn`: API Gateway integration ARN
+
+### Testing Pattern
+- Use AWS CLI with `AWS_PROFILE=jk` for authentication
+- Test with empty payload: `aws lambda invoke --function-name {function-name} --payload '{}' response.json`
+- Verify response structure: `{"statusCode":200,"body":"Hello World"}`
+- Check CloudWatch logs for structured JSON logging
+
+### Go Lambda Best Practices
+- Use `github.com/aws/aws-lambda-go/lambda` runtime
+- Implement structured logging with `github.com/rs/zerolog`
+- Configure log level via `LOG_LEVEL` environment variable
+- Use JSON output for CloudWatch structured logging
+- Include service name, timestamps, and execution metrics in logs

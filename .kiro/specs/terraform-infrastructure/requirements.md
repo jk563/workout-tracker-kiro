@@ -48,3 +48,26 @@ This feature establishes a foundational Terraform configuration for AWS infrastr
 1. WHEN the Terraform configuration is created THEN it SHALL be located in the `./infrastructure` directory
 2. WHEN reviewing the project structure THEN the infrastructure directory SHALL contain all Terraform-related files
 3. WHEN working with the infrastructure THEN it SHALL be independent of the application code structure
+
+### Requirement 5
+
+**User Story:** As a developer, I want an API Gateway in front of the Lambda function accessible via CloudFront, so that I can expose REST API endpoints through the same domain as the frontend application.
+
+#### Acceptance Criteria
+
+1. WHEN an API Gateway is created THEN it SHALL be configured as a REST API with regional endpoint type
+2. WHEN API Gateway is configured THEN it SHALL have a custom domain that integrates with the existing CloudFront distribution
+3. WHEN API paths are accessed THEN they SHALL be available under the `/api` path prefix through CloudFront
+4. WHEN the `/api/test` endpoint is called THEN it SHALL be routed to the existing Lambda function
+5. WHEN API Gateway is deployed THEN it SHALL use the same environment-based naming convention as other resources
+
+### Requirement 6
+
+**User Story:** As a developer, I want the API Gateway to be integrated with CloudFront, so that both frontend and API requests are served through the same domain with proper caching and security.
+
+#### Acceptance Criteria
+
+1. WHEN CloudFront distribution is configured THEN it SHALL include an origin for the API Gateway
+2. WHEN API requests are made THEN they SHALL be routed through CloudFront to the API Gateway origin
+3. WHEN API responses are cached THEN they SHALL use appropriate cache behaviors for API endpoints
+4. WHEN API Gateway integration is complete THEN it SHALL maintain the existing frontend functionality

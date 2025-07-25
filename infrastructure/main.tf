@@ -126,16 +126,54 @@ resource "aws_s3_bucket_policy" "frontend" {
 resource "aws_cloudfront_distribution" "frontend" {
   aliases = [local.domain_name]
 
+  # S3 origin for frontend static content
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
     origin_id                = "S3-${aws_s3_bucket.frontend.bucket}"
   }
 
+  # API Gateway origin for API endpoints
+  origin {
+    domain_name = "${aws_api_gateway_rest_api.workout_tracker_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com"
+    origin_id   = "APIGateway-${aws_api_gateway_rest_api.workout_tracker_api.id}"
+    origin_path = "/${aws_api_gateway_stage.workout_tracker_api.stage_name}"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
+
+  # Ordered cache behavior for API endpoints
+  ordered_cache_behavior {
+    path_pattern           = "/api/*"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "APIGateway-${aws_api_gateway_rest_api.workout_tracker_api.id}"
+    compress               = true
+    viewer_protocol_policy = "redirect-to-https"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["Authorization", "Content-Type", "Accept"]
+      cookies {
+        forward = "all"
+      }
+    }
+
+    # API responses should have minimal caching for dynamic content
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 300 # 5 minutes maximum cache for API responses
+  }
 
   default_cache_behavior {
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
@@ -226,4 +264,193 @@ output "cloudfront_distribution_id" {
 output "custom_domain_url" {
   description = "Custom domain URL for frontend access based on environment"
   value       = "https://${local.domain_name}"
+}
+
+# Lambda function IAM role
+resource "aws_iam_role" "lambda_execution_role" {
+  name = "workout-tracker-lambda-execution-role-${local.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "workout-tracker-lambda-execution-role"
+    Environment = local.environment
+  }
+}
+
+# Attach basic Lambda execution policy
+resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+  role       = aws_iam_role.lambda_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Lambda function
+resource "aws_lambda_function" "hello_world" {
+  filename      = "../backend/core/lambda-hello-world.zip"
+  function_name = "workout-tracker-hello-world-${local.environment}"
+  role          = aws_iam_role.lambda_execution_role.arn
+  handler       = "lambda-hello-world"
+  runtime       = "provided.al2"
+  architectures = ["arm64"]
+  timeout       = 30
+  memory_size   = 128
+
+  source_code_hash = filebase64sha256("../backend/core/lambda-hello-world.zip")
+
+  environment {
+    variables = {
+      ENVIRONMENT = local.environment
+    }
+  }
+
+  tags = {
+    Name        = "workout-tracker-hello-world"
+    Environment = local.environment
+  }
+}
+
+# Lambda function outputs
+output "lambda_function_name" {
+  description = "Name of the Lambda function"
+  value       = aws_lambda_function.hello_world.function_name
+}
+
+output "lambda_function_arn" {
+  description = "ARN of the Lambda function"
+  value       = aws_lambda_function.hello_world.arn
+}
+
+output "lambda_invoke_arn" {
+  description = "Invoke ARN of the Lambda function for API Gateway integration"
+  value       = aws_lambda_function.hello_world.invoke_arn
+}
+
+# API Gateway REST API
+resource "aws_api_gateway_rest_api" "workout_tracker_api" {
+  name        = "workout-tracker-api-${local.environment}"
+  description = "REST API for workout tracker application"
+
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+
+  tags = {
+    Name        = "workout-tracker-api"
+    Environment = local.environment
+    Project     = "workout-tracker-kiro"
+  }
+}
+
+# API Gateway root /api resource
+resource "aws_api_gateway_resource" "api_root" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  parent_id   = aws_api_gateway_rest_api.workout_tracker_api.root_resource_id
+  path_part   = "api"
+}
+
+# API Gateway /test resource under /api
+resource "aws_api_gateway_resource" "test" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  parent_id   = aws_api_gateway_resource.api_root.id
+  path_part   = "test"
+}
+
+# GET method for /api/test endpoint
+resource "aws_api_gateway_method" "test_get" {
+  rest_api_id   = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id   = aws_api_gateway_resource.test.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+# Lambda proxy integration for /api/test GET method
+resource "aws_api_gateway_integration" "test_lambda_integration" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id = aws_api_gateway_resource.test.id
+  http_method = aws_api_gateway_method.test_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.hello_world.invoke_arn
+}
+
+# Lambda permission to allow API Gateway invocation
+resource "aws_lambda_permission" "api_gateway_invoke" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.hello_world.function_name
+  principal     = "apigateway.amazonaws.com"
+
+  # Configure proper source ARN for API Gateway integration
+  source_arn = "${aws_api_gateway_rest_api.workout_tracker_api.execution_arn}/*/*"
+}
+
+# API Gateway deployment
+resource "aws_api_gateway_deployment" "workout_tracker_api" {
+  depends_on = [
+    aws_api_gateway_method.test_get,
+    aws_api_gateway_integration.test_lambda_integration,
+  ]
+
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+
+  triggers = {
+    # Redeploy when API configuration changes
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.api_root.id,
+      aws_api_gateway_resource.test.id,
+      aws_api_gateway_method.test_get.id,
+      aws_api_gateway_integration.test_lambda_integration.id,
+    ]))
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# API Gateway stage
+resource "aws_api_gateway_stage" "workout_tracker_api" {
+  deployment_id = aws_api_gateway_deployment.workout_tracker_api.id
+  rest_api_id   = aws_api_gateway_rest_api.workout_tracker_api.id
+  stage_name    = local.environment
+
+  # Stage configuration
+  cache_cluster_enabled = false
+  xray_tracing_enabled  = false
+
+  tags = {
+    Name        = "workout-tracker-api-${local.environment}"
+    Environment = local.environment
+    Project     = "workout-tracker-kiro"
+  }
+}
+
+
+
+# API Gateway outputs
+output "api_gateway_url" {
+  description = "API Gateway URL for the deployed stage"
+  value       = "https://${aws_api_gateway_rest_api.workout_tracker_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_stage.workout_tracker_api.stage_name}"
+}
+
+output "api_gateway_id" {
+  description = "API Gateway ID for reference"
+  value       = aws_api_gateway_rest_api.workout_tracker_api.id
+}
+
+output "api_gateway_stage_name" {
+  description = "API Gateway stage name"
+  value       = aws_api_gateway_stage.workout_tracker_api.stage_name
 }

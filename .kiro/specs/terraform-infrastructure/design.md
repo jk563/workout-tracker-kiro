@@ -137,3 +137,31 @@ data "aws_region" "current" {}
 - Modular file structure supports easy expansion
 - Data sources provide account verification
 - Tagged resources for management and cost tracking
+
+## API Gateway Integration
+
+### Architecture Overview
+The API Gateway will be integrated with the existing CloudFront distribution to provide a unified domain for both frontend and API requests. All API endpoints will be accessible under the `/api` path prefix through CloudFront.
+
+### API Gateway Configuration
+- **Type**: REST API with regional endpoint type
+- **Deployment Stage**: single stage as the development and production deployments use different workspaces
+- **Integration**: Lambda proxy integration with existing hello-world function
+- **Naming Convention**: `workout-tracker-api-${environment}`
+
+### CloudFront Integration
+- **Additional Origin**: API Gateway regional endpoint as second origin
+- **Path-Based Routing**: `/api/*` requests routed to API Gateway origin
+- **Cache Behavior**: Separate cache behavior for API endpoints with appropriate TTL settings
+- **Method Allowance**: All HTTP methods for API functionality
+
+### API Gateway Resources and Methods
+- **Root Resource**: `/api`
+- **Test Resource**: `/api/test` with GET method
+- **Lambda Integration**: Proxy integration with existing Lambda function
+- **CORS Configuration**: Enabled for cross-origin requests from frontend
+
+### Security and Performance
+- **HTTPS Only**: All API requests enforced through CloudFront HTTPS redirect
+- **Regional Endpoint**: API Gateway uses regional endpoint for better performance
+- **Lambda Permissions**: API Gateway granted invoke permissions for Lambda function
