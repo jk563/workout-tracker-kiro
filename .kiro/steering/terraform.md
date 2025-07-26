@@ -1,6 +1,5 @@
 ---
-inclusion: fileMatch
-fileMatchPattern: '*.tf'
+inclusion: always
 ---
 
 # Terraform Infrastructure Guidelines
@@ -59,3 +58,15 @@ fileMatchPattern: '*.tf'
 - Use AWS credential chain (profiles, environment variables, IAM roles)
 - Enable state encryption in S3 backend
 - Use state locking for concurrent access protection
+
+## Tagging
+- Add a Name tag to resources so they are easy to identify in the AWS console
+- Do not add a ManagedBy or similar tag
+- Most reasources will need only Name and the default tags
+- Tags that apply to all resources should be set in the default tags of the provider
+
+## Outputs
+- We do not need any outputs
+
+## Outputs
+- We do not need any variables

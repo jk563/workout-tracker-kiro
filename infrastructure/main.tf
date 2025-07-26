@@ -6,6 +6,20 @@ data "aws_region" "current" {}
 locals {
   environment = terraform.workspace
   domain_name = local.environment == "production" ? "workout-tracker.jamiekelly.com" : "workout-tracker-dev.jamiekelly.com"
+
+  # Environment-specific configuration for authentication table
+  auth_table_config = {
+    development = {
+      deletion_protection    = false
+      point_in_time_recovery = false
+      log_retention_days     = 14
+    }
+    production = {
+      deletion_protection    = true
+      point_in_time_recovery = true
+      log_retention_days     = 30
+    }
+  }
 }
 
 # Route 53 hosted zone data source
@@ -284,8 +298,7 @@ resource "aws_iam_role" "lambda_execution_role" {
   })
 
   tags = {
-    Name        = "workout-tracker-lambda-execution-role"
-    Environment = local.environment
+    Name = "workout-tracker-lambda-execution-role"
   }
 }
 
@@ -315,9 +328,10 @@ resource "aws_lambda_function" "hello_world" {
   }
 
   tags = {
-    Name        = "workout-tracker-hello-world"
-    Environment = local.environment
+    Name = "workout-tracker-hello-world"
   }
+
+  depends_on = [aws_cloudwatch_log_group.hello_world_lambda_logs]
 }
 
 # Lambda function outputs
@@ -336,6 +350,39 @@ output "lambda_invoke_arn" {
   value       = aws_lambda_function.hello_world.invoke_arn
 }
 
+# IAM role for API Gateway CloudWatch logging
+resource "aws_iam_role" "api_gateway_cloudwatch_role" {
+  name = "workout-tracker-api-gateway-cloudwatch-role-${local.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "workout-tracker-api-gateway-cloudwatch-role-${local.environment}"
+  }
+}
+
+# Attach CloudWatch logs policy to API Gateway role
+resource "aws_iam_role_policy_attachment" "api_gateway_cloudwatch" {
+  role       = aws_iam_role.api_gateway_cloudwatch_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+# API Gateway account settings for CloudWatch logging
+resource "aws_api_gateway_account" "main" {
+  cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch_role.arn
+}
+
 # API Gateway REST API
 resource "aws_api_gateway_rest_api" "workout_tracker_api" {
   name        = "workout-tracker-api-${local.environment}"
@@ -346,9 +393,7 @@ resource "aws_api_gateway_rest_api" "workout_tracker_api" {
   }
 
   tags = {
-    Name        = "workout-tracker-api"
-    Environment = local.environment
-    Project     = "workout-tracker-kiro"
+    Name = "workout-tracker-api"
   }
 }
 
@@ -431,10 +476,24 @@ resource "aws_api_gateway_stage" "workout_tracker_api" {
   xray_tracing_enabled  = false
 
   tags = {
-    Name        = "workout-tracker-api-${local.environment}"
-    Environment = local.environment
-    Project     = "workout-tracker-kiro"
+    Name = "workout-tracker-api-${local.environment}"
   }
+
+  depends_on = [aws_cloudwatch_log_group.api_gateway_logs]
+}
+
+# API Gateway method settings for logging
+resource "aws_api_gateway_method_settings" "workout_tracker_api" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  stage_name  = aws_api_gateway_stage.workout_tracker_api.stage_name
+  method_path = "*/*"
+
+  settings {
+    metrics_enabled = true
+    logging_level   = "INFO"
+  }
+
+  depends_on = [aws_api_gateway_account.main]
 }
 
 
@@ -453,4 +512,126 @@ output "api_gateway_id" {
 output "api_gateway_stage_name" {
   description = "API Gateway stage name"
   value       = aws_api_gateway_stage.workout_tracker_api.stage_name
+}
+
+# DynamoDB table for user authentication data
+resource "aws_dynamodb_table" "auth_table" {
+  name         = "workout-tracker-auth"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_id"
+  table_class  = "STANDARD"
+
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+
+  # Server-side encryption with AWS managed KMS key
+  server_side_encryption {
+    enabled = true
+  }
+
+  # Point-in-time recovery based on environment
+  point_in_time_recovery {
+    enabled = local.auth_table_config[local.environment].point_in_time_recovery
+  }
+
+  # Deletion protection for production environment
+  deletion_protection_enabled = local.auth_table_config[local.environment].deletion_protection
+
+  tags = {
+    Name        = "workout-tracker-auth-${local.environment}"
+    Environment = local.environment
+    Project     = "workout-tracker"
+    Component   = "authentication"
+  }
+}
+
+# IAM role for Lambda functions accessing authentication DynamoDB table
+resource "aws_iam_role" "auth_lambda_role" {
+  name = "workout-tracker-auth-lambda-role-${local.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "workout-tracker-auth-lambda-role-${local.environment}"
+  }
+}
+
+# IAM policy for DynamoDB access with least privilege
+resource "aws_iam_policy" "auth_dynamodb_policy" {
+  name        = "workout-tracker-auth-dynamodb-policy-${local.environment}"
+  description = "IAM policy for Lambda functions to access authentication DynamoDB table"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem"
+        ]
+        Resource = aws_dynamodb_table.auth_table.arn
+      }
+    ]
+  })
+
+  tags = {
+    Name = "workout-tracker-auth-dynamodb-policy-${local.environment}"
+  }
+}
+
+# Attach DynamoDB policy to Lambda role
+resource "aws_iam_role_policy_attachment" "auth_lambda_dynamodb" {
+  role       = aws_iam_role.auth_lambda_role.name
+  policy_arn = aws_iam_policy.auth_dynamodb_policy.arn
+}
+
+# Attach basic Lambda execution policy for CloudWatch logs
+resource "aws_iam_role_policy_attachment" "auth_lambda_basic_execution" {
+  role       = aws_iam_role.auth_lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# CloudWatch log group for hello world Lambda function
+resource "aws_cloudwatch_log_group" "hello_world_lambda_logs" {
+  name              = "/aws/lambda/workout-tracker-hello-world-${local.environment}"
+  retention_in_days = local.auth_table_config[local.environment].log_retention_days
+
+  tags = {
+    Name = "workout-tracker-hello-world-lambda-logs-${local.environment}"
+  }
+}
+
+# CloudWatch log group for authentication Lambda functions
+resource "aws_cloudwatch_log_group" "auth_lambda_logs" {
+  name              = "/aws/lambda/workout-tracker-auth-${local.environment}"
+  retention_in_days = local.auth_table_config[local.environment].log_retention_days
+
+  tags = {
+    Name = "workout-tracker-auth-lambda-logs-${local.environment}"
+  }
+}
+
+# CloudWatch log group for API Gateway access logs
+resource "aws_cloudwatch_log_group" "api_gateway_logs" {
+  name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.workout_tracker_api.id}/${local.environment}"
+  retention_in_days = local.auth_table_config[local.environment].log_retention_days
+
+  tags = {
+    Name = "workout-tracker-api-gateway-logs-${local.environment}"
+  }
 }

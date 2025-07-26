@@ -82,7 +82,7 @@
   - Ensure API requests bypass caching for dynamic content
   - _Requirements: 6.2, 6.3_
 
-- [ ] 14. Add API Gateway outputs and test integration
+- [x] 14. Add API Gateway outputs and test integration
   - Add output for API Gateway URL and stage
   - Add output for API Gateway ID for reference
   - Test `/api/test` endpoint through CloudFront domain
