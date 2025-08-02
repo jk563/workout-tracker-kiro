@@ -297,16 +297,16 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 
 # Lambda function
 resource "aws_lambda_function" "hello_world" {
-  filename      = "../backend/core/lambda-hello-world.zip"
-  function_name = "workout-tracker-hello-world-${local.environment}"
+  filename      = "../backend/core/athlete-forge.zip"
+  function_name = "workout-tracker-athlete-forge-${local.environment}"
   role          = aws_iam_role.lambda_execution_role.arn
-  handler       = "lambda-hello-world"
+  handler       = "index.handler"
   runtime       = "provided.al2"
   architectures = ["arm64"]
   timeout       = 30
   memory_size   = 128
 
-  source_code_hash = filebase64sha256("../backend/core/lambda-hello-world.zip")
+  source_code_hash = filebase64sha256("../backend/core/athlete-forge.zip")
 
   environment {
     variables = {
@@ -315,7 +315,7 @@ resource "aws_lambda_function" "hello_world" {
   }
 
   tags = {
-    Name        = "workout-tracker-hello-world"
+    Name        = "workout-tracker-athlete-forge"
     Environment = local.environment
   }
 }

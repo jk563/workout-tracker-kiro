@@ -1,4 +1,4 @@
-# Lambda Hello World
+# Athlete Forge
 
 A simple AWS Lambda function written in Go that returns "Hello World" when invoked. The function uses zerolog for structured logging and follows Go best practices for code organization and testing.
 
@@ -33,7 +33,7 @@ GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o bootstrap m
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags lambda.norpc -o bootstrap main.go
 
 # Build for local development/testing
-go build -o lambda-hello-world main.go
+go build -o athlete-forge main.go
 ```
 
 The build produces a `bootstrap` binary that can be packaged and deployed to AWS Lambda using the `provided.al2023` runtime.
@@ -44,7 +44,7 @@ After building, create a deployment package:
 
 ```bash
 # Create zip file for deployment
-zip lambda-hello-world.zip bootstrap
+zip athlete-forge.zip bootstrap
 ```
 
 ## Testing

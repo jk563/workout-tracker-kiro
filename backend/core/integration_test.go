@@ -11,7 +11,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/rs/zerolog"
-	"lambda-hello-world/handler"
+	"athlete-forge/handler"
 )
 
 // TestLambdaIntegration tests the complete Lambda function flow
@@ -249,7 +249,7 @@ func configureTestLogger(output *bytes.Buffer) zerolog.Logger {
 		Level(logLevel).
 		With().
 		Timestamp().
-		Str("service", "lambda-hello-world").
+		Str("service", "athlete-forge").
 		Logger()
 
 	return logger

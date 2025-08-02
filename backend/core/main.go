@@ -5,7 +5,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/rs/zerolog"
-	"lambda-hello-world/handler"
+	"athlete-forge/handler"
 )
 
 func main() {
@@ -38,7 +38,7 @@ func configureLogger() zerolog.Logger {
 		Level(logLevel).
 		With().
 		Timestamp().
-		Str("service", "lambda-hello-world").
+		Str("service", "athlete-forge").
 		Logger()
 
 	return logger

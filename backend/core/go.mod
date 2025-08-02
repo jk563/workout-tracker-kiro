@@ -1,4 +1,4 @@
-module lambda-hello-world
+module athlete-forge
 
 go 1.22.2
 
