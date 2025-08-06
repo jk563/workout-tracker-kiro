@@ -1,11 +1,38 @@
 import js from "@eslint/js";
-import svelte from "eslint-plugin-svelte";
+import react from "eslint-plugin-react";
+import reactHooks from "eslint-plugin-react-hooks";
 import typescriptParser from "@typescript-eslint/parser";
-import svelteParser from "svelte-eslint-parser";
 
 export default [
   js.configs.recommended,
-  ...svelte.configs["flat/recommended"],
+  {
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    plugins: {
+      react,
+      "react-hooks": reactHooks,
+    },
+    languageOptions: {
+      parser: typescriptParser,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: "module",
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+    },
+    settings: {
+      react: {
+        version: "detect",
+      },
+    },
+    rules: {
+      ...react.configs.recommended.rules,
+      ...reactHooks.configs.recommended.rules,
+      "react/react-in-jsx-scope": "off", // Not needed with React 17+ JSX transform
+      "react/prop-types": "off", // Using TypeScript for prop validation
+    },
+  },
   {
     // Node.js configuration files
     files: ["*.config.js", "scripts/**/*.js"],
@@ -28,8 +55,8 @@ export default [
     },
   },
   {
-    // Browser/Svelte files
-    files: ["src/**/*.js", "src/**/*.svelte"],
+    // Browser/React files
+    files: ["src/**/*.{js,jsx,ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -40,6 +67,9 @@ export default [
         sessionStorage: "readonly",
         console: "readonly",
         fetch: "readonly",
+        AbortController: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
       },
     },
     rules: {
@@ -49,24 +79,10 @@ export default [
       "no-var": "error",
     },
   },
-  {
-    // Svelte specific configuration
-    files: ["**/*.svelte"],
-    languageOptions: {
-      parser: svelteParser,
-      parserOptions: {
-        parser: typescriptParser,
-      },
-    },
-    rules: {
-      "svelte/no-unused-svelte-ignore": "error",
-      "svelte/no-at-html-tags": "error",
-      "svelte/valid-compile": "error",
-    },
-  },
+
   {
     // Test files
-    files: ["**/*.test.js", "**/*.spec.js", "tests/**/*.js"],
+    files: ["**/*.test.{js,jsx,ts,tsx}", "**/*.spec.{js,jsx,ts,tsx}", "tests/**/*.{js,jsx,ts,tsx}"],
     languageOptions: {
       globals: {
         console: "readonly",
@@ -74,6 +90,8 @@ export default [
         document: "readonly",
         global: "readonly",
         process: "readonly",
+        fetch: "readonly",
+        AbortSignal: "readonly",
       },
     },
     rules: {
@@ -83,7 +101,6 @@ export default [
   },
   {
     ignores: [
-      ".svelte-kit/**",
       "build/**",
       "dist/**",
       "node_modules/**",

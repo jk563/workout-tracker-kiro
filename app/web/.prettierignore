@@ -1,5 +1,4 @@
 # Build outputs
-.svelte-kit/
 build/
 dist/
 coverage/
@@ -15,7 +14,7 @@ package-lock.json
 *.min.css
 
 # Static assets
-static/
+public/
 
 # Logs
 *.log

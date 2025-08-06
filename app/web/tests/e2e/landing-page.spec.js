@@ -283,6 +283,178 @@ test.describe("Landing Page E2E Tests", () => {
     });
   });
 
+  test.describe("ConnectivityStatus Integration", () => {
+    test("should display ConnectivityStatus component in top right position", async ({ page }) => {
+      // Arrange & Act
+      await navigateToLandingPage(page);
+
+      // Assert
+      const connectivityStatus = page.locator(
+        '[role="complementary"][aria-label="Backend connectivity status"]'
+      );
+      await expect(connectivityStatus).toBeVisible();
+
+      // Verify positioning
+      const boundingBox = await connectivityStatus.boundingBox();
+      expect(boundingBox).toBeTruthy();
+
+      // Should be in top right area (within reasonable bounds)
+      const viewportSize = page.viewportSize();
+      expect(boundingBox.x).toBeGreaterThan(viewportSize.width * 0.8); // Right side
+      expect(boundingBox.y).toBeLessThan(viewportSize.height * 0.2); // Top area
+    });
+
+    test("should not interfere with main content layout", async ({ page }) => {
+      // Arrange & Act
+      await navigateToLandingPage(page);
+
+      // Assert
+      const mainHeading = await getMainHeading(page);
+      const connectivityStatus = page.locator('[role="complementary"]');
+
+      await expect(mainHeading).toBeVisible();
+      await expect(connectivityStatus).toBeVisible();
+
+      // Verify both elements are positioned correctly
+      const headingBox = await mainHeading.boundingBox();
+      const statusBox = await connectivityStatus.boundingBox();
+
+      expect(headingBox).toBeTruthy();
+      expect(statusBox).toBeTruthy();
+
+      // Status should be in top right corner (fixed positioning)
+      const viewportSize = page.viewportSize();
+      expect(statusBox.x).toBeGreaterThan(viewportSize.width * 0.7); // Right side
+      expect(statusBox.y).toBeLessThan(viewportSize.height * 0.2); // Top area
+
+      // Main heading should be centered and not overlapped by status
+      expect(headingBox.x).toBeLessThan(viewportSize.width * 0.8); // Heading stays in main area
+    });
+
+    test("should maintain visibility across different viewport sizes", async ({ page }) => {
+      const testViewports = [
+        VIEWPORTS.mobilePortrait,
+        VIEWPORTS.tabletLandscape,
+        VIEWPORTS.desktopLarge,
+      ];
+
+      for (const viewport of testViewports) {
+        // Arrange & Act
+        await page.setViewportSize(viewport);
+        await navigateToLandingPage(page);
+
+        // Assert
+        const connectivityStatus = page.locator('[role="complementary"]');
+        await expect(connectivityStatus).toBeVisible();
+
+        // Verify it's still in top right area for each viewport
+        const boundingBox = await connectivityStatus.boundingBox();
+        expect(boundingBox).toBeTruthy();
+        expect(boundingBox.x).toBeGreaterThan(viewport.width * 0.7); // Right side
+        expect(boundingBox.y).toBeLessThan(viewport.height * 0.3); // Top area
+      }
+    });
+
+    test("should display visual status changes", async ({ page }) => {
+      // Arrange & Act
+      await navigateToLandingPage(page);
+
+      // Assert - Check that status indicator is present
+      const statusIndicator = page.locator('[role="status"]');
+      await expect(statusIndicator).toBeVisible();
+
+      // Verify it has proper ARIA attributes
+      await expect(statusIndicator).toHaveAttribute("aria-live", "polite");
+      await expect(statusIndicator).toHaveAttribute("aria-label", /.+/);
+      await expect(statusIndicator).toHaveAttribute("aria-describedby", /.+/);
+
+      // Check that description element exists
+      const descriptionId = await statusIndicator.getAttribute("aria-describedby");
+      const description = page.locator(`#${descriptionId}`);
+      await expect(description).toBeVisible();
+      await expect(description).toHaveClass("sr-only");
+    });
+
+    test("should be accessible to screen readers", async ({ page }) => {
+      // Arrange & Act
+      await navigateToLandingPage(page);
+
+      // Assert accessibility structure
+      const complementary = page.locator('[role="complementary"]');
+      await expect(complementary).toHaveAttribute("aria-label", "Backend connectivity status");
+
+      const status = page.locator('[role="status"]');
+      await expect(status).toHaveAttribute("role", "status");
+      await expect(status).toHaveAttribute("aria-live", "polite");
+
+      // Verify screen reader description
+      const descriptionId = await status.getAttribute("aria-describedby");
+      const description = page.locator(`#${descriptionId}`);
+      await expect(description).toBeVisible();
+      await expect(description).toHaveClass("sr-only");
+
+      // Check that description has meaningful content
+      const descriptionText = await description.textContent();
+      expect(descriptionText).toMatch(/(checking|healthy|unhealthy)/i);
+    });
+
+    test("should handle component state transitions gracefully", async ({ page }) => {
+      // Arrange & Act
+      await navigateToLandingPage(page);
+
+      // Wait for initial state to stabilize
+      const statusIndicator = page.locator('[role="status"]');
+      await expect(statusIndicator).toBeVisible();
+
+      // Get initial state
+      const initialAriaLabel = await statusIndicator.getAttribute("aria-label");
+      expect(initialAriaLabel).toBeTruthy();
+
+      // Wait a bit to see if state changes (component should be polling)
+      await page.waitForTimeout(1000);
+
+      // Verify component is still functional
+      await expect(statusIndicator).toBeVisible();
+      const currentAriaLabel = await statusIndicator.getAttribute("aria-label");
+      expect(currentAriaLabel).toBeTruthy();
+
+      // Verify no layout shifts occurred
+      const boundingBox = await statusIndicator.boundingBox();
+      expect(boundingBox).toBeTruthy();
+      expect(boundingBox.width).toBeGreaterThan(0);
+      expect(boundingBox.height).toBeGreaterThan(0);
+    });
+
+    test("should maintain fixed positioning during page scroll", async ({ page }) => {
+      // Arrange - Add some content to make page scrollable
+      await page.goto("/");
+      await page.addStyleTag({
+        content: `
+          body::after {
+            content: "";
+            display: block;
+            height: 200vh;
+          }
+        `
+      });
+
+      // Act - Scroll down
+      await page.evaluate(() => window.scrollTo(0, 500));
+
+      // Assert - Status should still be visible in fixed position
+      const connectivityStatus = page.locator('[role="complementary"]');
+      await expect(connectivityStatus).toBeVisible();
+
+      const boundingBox = await connectivityStatus.boundingBox();
+      expect(boundingBox).toBeTruthy();
+
+      // Should still be in top right corner despite scroll
+      const viewportSize = page.viewportSize();
+      expect(boundingBox.x).toBeGreaterThan(viewportSize.width * 0.7);
+      expect(boundingBox.y).toBeLessThan(viewportSize.height * 0.3);
+    });
+  });
+
   test.describe("Cross-Browser Compatibility", () => {
     test("should display consistently across browsers", async ({ page, browserName }) => {
       // Arrange & Act

@@ -70,6 +70,37 @@ it('should render component with correct props', () => {
 });
 ```
 
+### Async Operations with Fake Timers Pattern
+When testing services with retry logic, delays, or timeouts using `vi.useFakeTimers()`, coordinate promises properly to avoid unhandled rejections:
+
+```javascript
+it('should handle retries with exponential backoff', async () => {
+  // Arrange
+  mockFetch.mockRejectedValue(new Error('Network error'));
+  
+  // Act & Assert
+  const promise = service.performOperation();
+  
+  // Coordinate timer advancement with promise resolution
+  const advancePromise = (async () => {
+    await vi.advanceTimersByTimeAsync(1000); // First retry
+    await vi.advanceTimersByTimeAsync(2000); // Second retry
+    await vi.advanceTimersByTimeAsync(4000); // Third retry
+  })();
+
+  // Wait for both operations to complete
+  await Promise.all([
+    expect(promise).rejects.toThrow('Network error'),
+    advancePromise
+  ]);
+});
+```
+
+**Key Points:**
+- Use `Promise.all()` to coordinate service promises with timer advancement
+- Wrap timer advancement in an async function for proper sequencing
+- This prevents unhandled promise rejections during retry operations
+
 ## Component Development
 - **TDD Approach**: Write component tests first, then implement the component
 - Create components in `src/lib/components/`

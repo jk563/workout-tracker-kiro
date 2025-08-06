@@ -1,13 +1,16 @@
-import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vitest/config";
-import { svelteTesting } from "@testing-library/svelte/vite";
+import react from "@vitejs/plugin-react";
 import compression from "vite-plugin-compression";
 import { visualizer } from "rollup-plugin-visualizer";
 
 export default defineConfig(({ mode }) => ({
   plugins: [
-    sveltekit(),
-    svelteTesting(),
+    react({
+      // Enable React Fast Refresh
+      fastRefresh: true,
+      // Support for React 19 features
+      jsxRuntime: "automatic",
+    }),
     // Add compression for production builds
     ...(mode === "production"
       ? [
@@ -48,6 +51,7 @@ export default defineConfig(({ mode }) => ({
   // Build configuration with production optimizations
   build: {
     target: "esnext",
+    outDir: "build", // Same as current Svelte build
     minify: "esbuild",
     sourcemap: true,
     cssMinify: true,
@@ -59,8 +63,8 @@ export default defineConfig(({ mode }) => ({
         manualChunks: (id) => {
           // Vendor chunk for external dependencies
           if (id.includes("node_modules")) {
-            if (id.includes("svelte")) {
-              return "svelte-vendor";
+            if (id.includes("react")) {
+              return "react-vendor";
             }
             // Split large vendor libraries into separate chunks
             if (id.includes("@testing-library") || id.includes("vitest")) {
@@ -69,12 +73,12 @@ export default defineConfig(({ mode }) => ({
             return "vendor";
           }
           // Component chunks for better code splitting
-          if (id.includes("src/lib/components")) {
+          if (id.includes("src/components")) {
             return "components";
           }
-          // Utility chunks for shared code
-          if (id.includes("src/lib/utils")) {
-            return "utils";
+          // Hook chunks for React hooks
+          if (id.includes("src/hooks")) {
+            return "hooks";
           }
         },
         // Optimize asset naming for better caching
@@ -128,8 +132,8 @@ export default defineConfig(({ mode }) => ({
 
   // Optimization configuration
   optimizeDeps: {
-    include: ["svelte"],
-    exclude: ["@testing-library/svelte", "@testing-library/jest-dom"],
+    include: ["react", "react-dom", "react-router-dom"],
+    exclude: ["@testing-library/react", "@testing-library/jest-dom"],
     // Force optimization of commonly used dependencies
     force: mode === "production",
     // Enable esbuild for dependency optimization
@@ -143,7 +147,11 @@ export default defineConfig(({ mode }) => ({
 
   // Test configuration for Vitest
   test: {
-    include: ["src/**/*.{test,spec}.{js,ts}", "tests/unit/**/*.{test,spec}.{js,ts}"],
+    include: [
+      "src/**/*.{test,spec}.{js,jsx,ts,tsx}",
+      "tests/unit/**/*.{test,spec}.{js,jsx,ts,tsx}",
+      "tests/integration/**/*.{test,spec}.{js,jsx,ts,tsx}",
+    ],
     environment: "jsdom",
     setupFiles: ["./tests/setup.js"],
     coverage: {
@@ -153,8 +161,8 @@ export default defineConfig(({ mode }) => ({
         "tests/",
         "**/*.config.js",
         "**/*.config.ts",
-        ".svelte-kit/**",
-        "src/app.html",
+        "build/",
+        "src/main.jsx", // Entry point
       ],
       thresholds: {
         lines: 80,
@@ -162,9 +170,9 @@ export default defineConfig(({ mode }) => ({
         branches: 80,
         statements: 80,
       },
-      include: ["src/**/*.{js,ts,svelte}"],
+      include: ["src/**/*.{js,jsx,ts,tsx}"],
     },
-    // Configure for Svelte 5 compatibility
+    // Configure for React compatibility
     globals: true,
   },
 

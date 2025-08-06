@@ -300,7 +300,7 @@ resource "aws_lambda_function" "hello_world" {
   filename      = "../backend/core/athlete-forge.zip"
   function_name = "workout-tracker-athlete-forge-${local.environment}"
   role          = aws_iam_role.lambda_execution_role.arn
-  handler       = "index.handler"
+  handler       = "bootstrap"
   runtime       = "provided.al2"
   architectures = ["arm64"]
   timeout       = 30
@@ -366,11 +366,34 @@ resource "aws_api_gateway_resource" "test" {
   path_part   = "test"
 }
 
+# API Gateway /health resource under /api
+resource "aws_api_gateway_resource" "health" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  parent_id   = aws_api_gateway_resource.api_root.id
+  path_part   = "health"
+}
+
 # GET method for /api/test endpoint
 resource "aws_api_gateway_method" "test_get" {
   rest_api_id   = aws_api_gateway_rest_api.workout_tracker_api.id
   resource_id   = aws_api_gateway_resource.test.id
   http_method   = "GET"
+  authorization = "NONE"
+}
+
+# GET method for /api/health endpoint
+resource "aws_api_gateway_method" "health_get" {
+  rest_api_id   = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id   = aws_api_gateway_resource.health.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+# OPTIONS method for /api/health endpoint (CORS preflight)
+resource "aws_api_gateway_method" "health_options" {
+  rest_api_id   = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id   = aws_api_gateway_resource.health.id
+  http_method   = "OPTIONS"
   authorization = "NONE"
 }
 
@@ -383,6 +406,87 @@ resource "aws_api_gateway_integration" "test_lambda_integration" {
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.hello_world.invoke_arn
+}
+
+# Lambda proxy integration for /api/health GET method
+resource "aws_api_gateway_integration" "health_lambda_integration" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id = aws_api_gateway_resource.health.id
+  http_method = aws_api_gateway_method.health_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.hello_world.invoke_arn
+}
+
+# CORS integration for /api/health OPTIONS method
+resource "aws_api_gateway_integration" "health_options_integration" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id = aws_api_gateway_resource.health.id
+  http_method = aws_api_gateway_method.health_options.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({
+      statusCode = 200
+    })
+  }
+}
+
+# Method response for /api/health GET endpoint
+resource "aws_api_gateway_method_response" "health_get_200" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id = aws_api_gateway_resource.health.id
+  http_method = aws_api_gateway_method.health_get.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true
+  }
+}
+
+# Method response for /api/health OPTIONS endpoint (CORS preflight)
+resource "aws_api_gateway_method_response" "health_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id = aws_api_gateway_resource.health.id
+  http_method = aws_api_gateway_method.health_options.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+# Integration response for /api/health GET endpoint
+resource "aws_api_gateway_integration_response" "health_get_200" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id = aws_api_gateway_resource.health.id
+  http_method = aws_api_gateway_method.health_get.http_method
+  status_code = aws_api_gateway_method_response.health_get_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = "'*'"
+  }
+
+  depends_on = [aws_api_gateway_integration.health_lambda_integration]
+}
+
+# Integration response for /api/health OPTIONS endpoint (CORS preflight)
+resource "aws_api_gateway_integration_response" "health_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  resource_id = aws_api_gateway_resource.health.id
+  http_method = aws_api_gateway_method.health_options.http_method
+  status_code = aws_api_gateway_method_response.health_options_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+
+  depends_on = [aws_api_gateway_integration.health_options_integration]
 }
 
 # Lambda permission to allow API Gateway invocation
@@ -401,6 +505,14 @@ resource "aws_api_gateway_deployment" "workout_tracker_api" {
   depends_on = [
     aws_api_gateway_method.test_get,
     aws_api_gateway_integration.test_lambda_integration,
+    aws_api_gateway_method.health_get,
+    aws_api_gateway_method.health_options,
+    aws_api_gateway_integration.health_lambda_integration,
+    aws_api_gateway_integration.health_options_integration,
+    aws_api_gateway_method_response.health_get_200,
+    aws_api_gateway_method_response.health_options_200,
+    aws_api_gateway_integration_response.health_get_200,
+    aws_api_gateway_integration_response.health_options_200,
   ]
 
   rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
@@ -410,13 +522,65 @@ resource "aws_api_gateway_deployment" "workout_tracker_api" {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.api_root.id,
       aws_api_gateway_resource.test.id,
+      aws_api_gateway_resource.health.id,
       aws_api_gateway_method.test_get.id,
+      aws_api_gateway_method.health_get.id,
+      aws_api_gateway_method.health_options.id,
       aws_api_gateway_integration.test_lambda_integration.id,
+      aws_api_gateway_integration.health_lambda_integration.id,
+      aws_api_gateway_integration.health_options_integration.id,
     ]))
   }
 
   lifecycle {
     create_before_destroy = true
+  }
+}
+
+# IAM role for API Gateway CloudWatch logging
+resource "aws_iam_role" "api_gateway_cloudwatch" {
+  name = "workout-tracker-api-gateway-cloudwatch-${local.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "workout-tracker-api-gateway-cloudwatch"
+    Environment = local.environment
+    Project     = "workout-tracker-kiro"
+  }
+}
+
+# Attach CloudWatch logs policy to API Gateway role
+resource "aws_iam_role_policy_attachment" "api_gateway_cloudwatch" {
+  role       = aws_iam_role.api_gateway_cloudwatch.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+# API Gateway account configuration for CloudWatch logging
+resource "aws_api_gateway_account" "main" {
+  cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch.arn
+}
+
+# CloudWatch log group for API Gateway
+resource "aws_cloudwatch_log_group" "api_gateway" {
+  name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.workout_tracker_api.id}/${local.environment}"
+  retention_in_days = 14
+
+  tags = {
+    Name        = "workout-tracker-api-logs-${local.environment}"
+    Environment = local.environment
+    Project     = "workout-tracker-kiro"
   }
 }
 
@@ -430,10 +594,43 @@ resource "aws_api_gateway_stage" "workout_tracker_api" {
   cache_cluster_enabled = false
   xray_tracing_enabled  = false
 
+  # Access logging configuration
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gateway.arn
+    format = jsonencode({
+      requestId        = "$context.requestId"
+      ip               = "$context.identity.sourceIp"
+      caller           = "$context.identity.caller"
+      user             = "$context.identity.user"
+      requestTime      = "$context.requestTime"
+      httpMethod       = "$context.httpMethod"
+      resourcePath     = "$context.resourcePath"
+      status           = "$context.status"
+      protocol         = "$context.protocol"
+      responseLength   = "$context.responseLength"
+      responseTime     = "$context.responseTime"
+      error            = "$context.error.message"
+      integrationError = "$context.integration.error"
+    })
+  }
+
   tags = {
     Name        = "workout-tracker-api-${local.environment}"
     Environment = local.environment
     Project     = "workout-tracker-kiro"
+  }
+}
+
+# Method settings for health endpoint logging
+resource "aws_api_gateway_method_settings" "health_logging" {
+  rest_api_id = aws_api_gateway_rest_api.workout_tracker_api.id
+  stage_name  = aws_api_gateway_stage.workout_tracker_api.stage_name
+  method_path = "${aws_api_gateway_resource.health.path_part}/GET"
+
+  settings {
+    metrics_enabled    = true
+    logging_level      = "INFO"
+    data_trace_enabled = true
   }
 }
 
@@ -453,4 +650,9 @@ output "api_gateway_id" {
 output "api_gateway_stage_name" {
   description = "API Gateway stage name"
   value       = aws_api_gateway_stage.workout_tracker_api.stage_name
+}
+
+output "health_endpoint_url" {
+  description = "Health check endpoint URL"
+  value       = "https://${aws_api_gateway_rest_api.workout_tracker_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_stage.workout_tracker_api.stage_name}/api/health"
 }
